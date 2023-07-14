@@ -1,0 +1,175 @@
+# For more information: https://laravel.com/docs/sail
+version: '3'
+services:
+  nginx-service:
+    image: nginx:${NGINX_VERSION}
+    container_name: nginx-${NODE_ENV}
+    ports:
+      - ${WEB_PORT}${NGINX_HOST_HTTP_PORT}:80
+      - ${WEB_PORT}${NGINX_HOST_HTTPS_PORT}:443
+    volumes:
+      - ${WEB_ROOT_PATH}:/app
+      - ${NGINX_NGINXCONF_PATH}:/etc/nginx/nginx.conf
+      - ${NGINX_CONF_PATH}:/etc/nginx/conf.d/
+      - ${NGINX_LOG_PATH}:/var/log/nginx/
+    depends_on:
+      - php-service
+    networks:
+      - networks-docker
+    restart: always
+    environment:
+      TZ: ${DOCKER_TIMEZONE}
+  # node-service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./docker/node/Dockerfile
+  #   ports:
+  #     - ${WEB_PORT}818:1818
+  #   container_name: node-${NODE_ENV}
+  #   volumes:
+  #     - ${WEB_ROOT_PATH}/web:/app
+  #   networks:
+  #     - networks-docker
+  #   restart: always
+  #   environment:
+  #     TZ: ${DOCKER_TIMEZONE}
+  #   tty: true
+
+  # php
+  php-service:
+    build:
+      context: .
+      dockerfile: ./docker/php/version/8.1/Dockerfile
+    container_name: php-${NODE_ENV}
+    # ports:
+    #     - ${PHP_PORT}:9000 # fpm 端口
+    volumes:
+      - ${WEB_ROOT_PATH}:/app
+      - ${PHP_FPM_PATH}:/usr/local/etc/php-fpm.d/
+      - /root/.ssh:/root/.ssh
+      - ./docker/php/conf.d/php.ini:/usr/local/etc/php/conf.d/docker-php-ext-php.ini
+      - ./docker/php/installer:/installer
+    depends_on:
+      - mysql-service
+      - redis-service
+    networks:
+      - networks-docker
+    # links:
+    #   # - mysql-service
+    #   - php-cli-service
+    #   # - redis-service
+    #   - rabbitmq-service
+    environment:
+      TZ: ${DOCKER_TIMEZONE}
+    privileged: true
+    restart: always
+    stdin_open: true
+    tty: true
+
+  php-cli-service:
+    # image: php:8.1.16-cli-alpine
+    build:
+      context: .
+      dockerfile: ./docker/php/version/8.1_cli/Dockerfile
+    container_name: php-cli-${NODE_ENV}
+    # ports:
+    # - 7272:7272
+    volumes:
+      - ./worker:/worker
+      - ./app:/app
+      - ${PHP_FPM_PATH}:/usr/local/etc/php-fpm.d/
+      - ./docker/php/conf.d/php.ini:/usr/local/etc/php/conf.d/docker-php-ext-php.ini
+      - ./entrypoint/php-cli/:/entrypoint
+      - ./entrypoint/php-cli/crond:/crond
+    entrypoint:
+      - /entrypoint/entrypoint.sh
+    networks:
+      - networks-docker
+      # networks-docker:
+      #   ipv4_address: 172.18.0.9
+    environment:
+      TZ: ${DOCKER_TIMEZONE}
+    privileged: true
+    restart: always
+    stdin_open: true
+    tty: true
+
+  mysql-service:
+    image: mysql:${MYSQL_VERSION}
+    container_name: mysql-${NODE_ENV}
+    ports:
+      - ${WEB_PORT}${MYSQL_PORT}:3306
+    volumes:
+      - ${MYSQL_DATA_PATH}:/var/lib/mysql
+      - ${MYSQL_CONF_PATH}:/etc/mysql/conf.d
+      - ${MYSQL_LOG_PATH}:/data/mysql/logs
+      - ./docker/mysql/conf:/etc/mysql/my.cnf
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: always # always restart unless stopped manually
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${DOCKER_TIMEZONE} # 设置时区
+    networks:
+      - networks-docker
+  redis-service:
+    image: redis:${REDIS_VERSION}
+    # image: redislabs/redismod:preview
+    container_name: redis-${NODE_ENV}
+    ports:
+      - ${WEB_PORT}${REDIS_PORT}:6379
+    volumes:
+      - ${REDIS_DATA_PATH}:/data
+      - ${REDIS_CONF_PATH}:/etc/redis/redis.conf
+    restart: always
+    networks:
+      - networks-docker
+    environment:
+      TZ: ${DOCKER_TIMEZONE}
+    stdin_open: true
+    tty: true
+    command: [ "redis-server", "/etc/redis/redis.conf" ]
+
+  # docker pull redislabs/redismod:preview
+  # rabbitmq-service:
+  #   image: rabbitmq:3.10.14-alpine
+  #   container_name: rabbitmq-${NODE_ENV}
+  #   restart: always
+  #   stdin_open: true
+  #   tty: true
+  #   volumes:
+  #     - ./docker/rabbitmq/data/:/var/lib/rabbitmq/
+  #   # ports:
+  #   #   - 5672:5672
+  #   #   - 15672:15672
+  #   networks:
+  #     - networks-docker
+  #   command:
+  #     - sh
+  #     - -c
+  #     - |
+  #       rabbitmq-plugins enable rabbitmq_management && rabbitmq-server 
+
+  # java-service:
+  #   # image: openjdk:17.0.2-slim-buster
+  #   image: openjdk:17.0.2-jdk
+  #   container_name: java-${NODE_ENV}
+  #   restart: always
+  #   stdin_open: true
+  #   tty: true
+  #   volumes:
+  #     - ./java/:/app/
+  #     - ./entrypoint/java/entrypoint.sh:/entrypoint.sh:rw
+  #   entrypoint:
+  #     - /entrypoint.sh
+  #   networks:
+  #     - networks-docker
+  #   environment:
+  #     TZ: ${DOCKER_TIMEZONE} # 设置时区
+    # ports:
+    #   - 8083:8083
+networks:
+  networks-docker:
+    driver: bridge
+    # ipam:
+    #   config:
+    #     - subnet: 172.18.0.0/24

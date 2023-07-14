@@ -1,0 +1,1 @@
+*/30 * * * * /entrypoint/command30.sh > /command30.log 2>&1
