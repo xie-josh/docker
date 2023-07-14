@@ -1,9 +1,4 @@
 docker/mysql/
-docker/redis/data/*
-docker/redis/logs/*
+docker/redis/
 /app
 .env
-/webman
-docker/rabbitmq/
-/java/
-worker/
